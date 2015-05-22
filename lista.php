@@ -110,7 +110,7 @@ select
 	where  sfi.order_id = sfop.parent_id
 	group by sfop.method, date(sfi.created_at)
     order by date(sfi.created_at) desc) 
-facturas'.$fecha;
+facturas';
 
 //Errores de facturacion
 $sqle='select facturas.id_factura 
