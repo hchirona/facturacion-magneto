@@ -16,7 +16,7 @@
 </td>
 <td>
 <form action="lista.php" method="post" target="lista">
-<input name="pagos" type="submit" value="Metodos de pago">
+<input name="pagos" type="submit" value="Caja Diaria">
 </form>
 </td>
 <td>

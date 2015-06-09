@@ -24,10 +24,9 @@ if (isset($_REQUEST['buscar'])) {
 	$fecha= 'where facturas.fecha >= "'.$from.'" and facturas.fecha <= "'.$to.'"';
 }
 
-//Facturación
+//Facturación Pedidos
 $sql0='select 
-  facturas.factura as factura
-, facturas.pedido as pedido
+  facturas.pedido as pedido
 , date(facturas.fecha) as fecha 
 , facturas.estado
 , facturas.productos as productos
@@ -36,32 +35,29 @@ $sql0='select
 , facturas.subtotal as subtotal
 , facturas.iva0 + facturas.iva4 + facturas.iva10 + facturas.iva21 as iva
 , facturas.total as total
- from ( 
-	SELECT sfig.entity_id as id_factura 
-	, sfig.order_id as id_pedido
-	, sfig.increment_id as factura
-	, sfig.order_increment_id as pedido
-	, sfi.created_at as fecha
+ from (
+SELECT 
+	  sfo.increment_id as pedido
+	, sfo.created_at as fecha
 	, sfo.state as estado 
-	, sfi.subtotal - sfi.discount_amount as productos 
-	, sfi.shipping_amount as transporte
-	, ifnull(sfi.cod_fee,0) as contrareembolso
-	, sfi.subtotal - sfi.discount_amount 
-	+ sfi.shipping_amount 
-	+ ifnull(sfi.cod_fee,0) as subtotal  
-	,sum(if(sfoi.tax_percent=0,sfoi.tax_amount,0)) as iva0 
-	,sum(if(sfoi.tax_percent=4,sfoi.tax_amount,0)) as iva4 
-	,sum(if(sfoi.tax_percent=10,sfoi.tax_amount,0)) as iva10 
-	,sum(if(sfoi.tax_percent=21,sfoi.tax_amount,0)) +  sfi.shipping_tax_amount + ifnull(sfi.cod_tax_amount,0) as iva21 
-    , sfi.grand_total as Total
-	FROM sales_flat_invoice sfi, sales_flat_order sfo, sales_flat_invoice_grid sfig, sales_flat_order_item sfoi 
-	WHERE sfi.entity_id = sfig.entity_id AND sfi.order_id = sfo.entity_id AND sfoi.order_id = sfi.order_id 
-	GROUP BY sfi.entity_id) 
-facturas '.$fecha.'
- group by facturas.factura';
+	, sfo.subtotal - sfo.discount_amount as productos 
+	, sfo.shipping_amount as transporte
+	, ifnull(sfo.cod_fee,0) as contrareembolso
+	, sfo.subtotal - sfo.discount_amount 
+	+ sfo.shipping_amount 
+	+ ifnull(sfo.cod_fee,0) as subtotal  
+	, sum(if(sfoi.tax_percent=0,sfoi.tax_amount,0)) as iva0 
+	, sum(if(sfoi.tax_percent=4,sfoi.tax_amount,0)) as iva4 
+	, sum(if(sfoi.tax_percent=10,sfoi.tax_amount,0)) as iva10 
+	, sum(if(sfoi.tax_percent=21,sfoi.tax_amount,0)) +  sfo.shipping_tax_amount + ifnull(sfo.cod_tax_amount,0) as iva21 
+    , sfo.grand_total as Total
+	FROM  sales_flat_order sfo, sales_flat_order_item sfoi 
+	WHERE sfoi.order_id = sfo.entity_id and (sfo.state NOT IN ("canceled","closed","pending_payment") OR sfo.status NOT IN ("canceled","closed","pending_payment","servired_pending"))
+	GROUP BY sfo.entity_id desc) 
+facturas';
 
 
-//Bases imponibles e ivas
+//Bases imponibles e ivas Pedidos
 $sql1='select 
   month(facturas.fecha) as mes
 , year(facturas.fecha) as anyo
@@ -76,21 +72,21 @@ $sql1='select
 , sum(facturas.iva0 + facturas.iva4 + facturas.iva10 + facturas.iva21) + sum(facturas.bi0 + facturas.bi4 + facturas.bi10 + facturas.bi21) as total 
  from ( 
 	select 
-	 date( sfi.created_at ) as fecha
+	 date( sfo.created_at ) as fecha
     ,sum(if(sfoi.tax_percent=0,sfoi.base_row_invoiced - sfoi.base_discount_invoiced,0)) as bi0
 	,sum(if(sfoi.tax_percent=4,sfoi.base_row_invoiced - sfoi.base_discount_invoiced,0)) as bi4 
 	,sum(if(sfoi.tax_percent=10,sfoi.base_row_invoiced - sfoi.base_discount_invoiced,0)) as bi10 
-	,sum(if(sfoi.tax_percent=21,sfoi.base_row_invoiced - sfoi.base_discount_invoiced,0)) + sfi.shipping_amount + ifnull(sfi.cod_fee,0) as bi21 
+	,sum(if(sfoi.tax_percent=21,sfoi.base_row_invoiced - sfoi.base_discount_invoiced,0)) + sfo.shipping_amount + ifnull(sfo.cod_fee,0) as bi21 
 	,sum(if(sfoi.tax_percent=0,sfoi.tax_amount,0)) as iva0 
 	,sum(if(sfoi.tax_percent=4,sfoi.tax_amount,0)) as iva4 
 	,sum(if(sfoi.tax_percent=10,sfoi.tax_amount,0)) as iva10 
-	,sum(if(sfoi.tax_percent=21,sfoi.tax_amount,0)) +  sfi.shipping_tax_amount + ifnull(sfi.cod_tax_amount,0) as iva21 
-	from sales_flat_invoice sfi, sales_flat_order_item sfoi 
-	where  sfoi.order_id = sfi.order_id 
-	GROUP BY sfi.order_id) facturas
+	,sum(if(sfoi.tax_percent=21,sfoi.tax_amount,0)) +  sfo.shipping_tax_amount + ifnull(sfo.cod_tax_amount,0) as iva21 
+	from sales_flat_order sfo, sales_flat_order_item sfoi 
+	where (sfo.state NOT IN ("canceled","closed","pending_payment") OR sfo.status NOT IN ("canceled","closed","pending_payment","servired_pending")) and sfoi.order_id = sfo.entity_id  
+	GROUP BY sfo.entity_id) facturas
 group by month(fecha), year(fecha)';
 
-//Metodos de pago
+//Metodos de pago Pedido
 $sql2='select 
   date(facturas.fecha) as fecha
 , facturas.metodo as metodo
@@ -99,17 +95,17 @@ $sql2='select
 , facturas.total as total
  from ( 
 select
-	  sfi.created_at as fecha
+	  sfo.created_at as fecha
     , sfop.method as metodo
-	, round(sum(sfi.subtotal - replace(sfi.discount_amount, "-", "" ) 
-	+ sfi.shipping_amount 
-	+ ifnull(sfi.cod_fee,0)),2) as subtotal 
-	, sum(sfi.tax_amount) as iva
-    , sum(sfi.grand_total) as total
-	from sales_flat_invoice sfi, sales_flat_order_payment sfop
-	where  sfi.order_id = sfop.parent_id
-	group by sfop.method, date(sfi.created_at)
-    order by date(sfi.created_at) desc) 
+	, round(sum(sfo.subtotal - sfo.discount_amount
+	+ sfo.shipping_amount 
+	+ ifnull(sfo.cod_fee,0)),2) as subtotal 
+	, sum(sfo.tax_amount) as iva
+    , sum(sfo.grand_total) as total
+	from sales_flat_order sfo, sales_flat_order_payment sfop
+	where  sfo.entity_id = sfop.parent_id and (sfo.state NOT IN ("canceled","closed","pending_payment") OR sfo.status NOT IN ("canceled","closed","pending_payment","servired_pending"))
+	group by sfop.method, date(sfo.created_at)
+    order by date(sfo.created_at) desc) 
 facturas';
 
 //Errores de facturacion
@@ -147,7 +143,6 @@ facturas.iva0 +facturas.iva4 + facturas.iva10 + facturas.iva21 + facturas.bi0 + 
 if (isset($_REQUEST['facturacion']) || isset($_REQUEST['buscar']) ) {
 	$sql=$sql0;
 	echo '<table><tr>
-	<td>N Factura</td>
 	<td>N Pedido</td>
 	<td>Fecha</td>
 	<td>Estado</td>
@@ -178,7 +173,6 @@ if (isset($_REQUEST['facturacion']) || isset($_REQUEST['buscar']) ) {
 			$total=$total + $factura['total'];
 			echo'
 			<tr>
-			<td>'.$factura['factura'].'</td>
 			<td>'.$factura['pedido'].'</td>
 			<td>'.$factura['fecha'].'</td>
 			<td>'.$factura['estado'].'</td>
@@ -192,7 +186,7 @@ if (isset($_REQUEST['facturacion']) || isset($_REQUEST['buscar']) ) {
 
 		} else {
 			$sigue = FALSE;
-			echo '<tr><td colspan="4">Totales</td>
+			echo '<tr><td colspan="3">Totales</td>
 			<td class="number">'.number_format($productos,2).'</td>
 			<td class="number">'.number_format($transporte,2).'</td>
 			<td class="number">'.number_format($contrareembolso,2).'</td>
