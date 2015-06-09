@@ -21,6 +21,11 @@
 </td>
 <td>
 <form action="lista.php" method="post" target="lista">
+<input name="inventario" type="submit" value="Inventario">
+</form>
+</td>
+<td>
+<form action="lista.php" method="post" target="lista">
 <input name="error" type="submit" value="errores">
 </form>
 </td>     

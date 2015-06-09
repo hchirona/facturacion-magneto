@@ -108,6 +108,23 @@ select
     order by date(sfo.created_at) desc) 
 facturas';
 
+$sql3='select 
+  facturas.id as id
+, facturas.codigo as codigo
+, facturas.nombre as nombre
+, facturas.precio as precio 
+, facturas.cantidad as cantidad
+ from ( 
+SELECT csi.product_id as id, cpe.sku as codigo,cpev.value as nombre, cpip.price as precio, csi.qty as cantidad
+FROM cataloginventory_stock_item csi, catalog_product_index_price cpip, catalog_product_entity cpe, catalog_product_entity_varchar cpev
+WHERE csi.product_id = cpip.entity_id
+AND csi.product_id = cpe.entity_id
+AND csi.product_id = cpev.entity_id
+AND cpev.store_id = 0 
+AND cpev.attribute_id = 71
+GROUP BY csi.product_id) 
+facturas';
+
 //Errores de facturacion
 $sqle='select facturas.id_factura 
 ,facturas.id_pedido 
@@ -314,6 +331,43 @@ if (isset($_REQUEST['pagos'])) {
 			<td class="number">'.number_format($iva,2).'</td>
 			<td class="number">'.number_format($total,2).'</td></tr></table>';
 
+		}
+	}
+mysqli_close($link);
+}
+
+if (isset($_REQUEST['inventario'])) {
+	$sql=$sql3;
+	echo '
+	<table><tr>
+	<td>ID</td>
+	<td>Codigo</td>
+	<td>Nombre</td>
+	<td>Cantidad</td>
+	<td>Precio</td></tr>';
+
+	$lista = mysqli_query($link, $sql);
+	print mysqli_error($link);
+	$sigue= TRUE;
+	$total=0;
+
+	while ($sigue) {
+		$factura= mysqli_fetch_array($lista);
+		if ($factura) {
+			$total=$total + ($factura['cantidad'] * $factura['precio']);
+			echo'
+			<tr>
+			<td>'.$factura['id'].'</td>
+			<td>'.$factura['codigo'].'</td>
+			<td>'.$factura['nombre'].'</td>
+			<td class="number">'.number_format($factura['cantidad'],2).'</td>
+			<td class="number">'.number_format($factura['precio'],2).'</td></tr>';
+
+
+		} else {
+			$sigue = FALSE;
+			echo '<tr><td colspan="4">Total</td>
+			<td class="number">'.number_format($total,2).'</td></tr></table>';
 		}
 	}
 mysqli_close($link);
