@@ -1,3 +1,12 @@
+<?php
+/*
+//   -------------------------------------------------------------------------------
+//  |     Magento Shop Control DV: Magento shop products, sales, iban and debug     |
+//  |              Copyright (c) 2015 by Héctor Chirona Torrentí                    |
+//  |                                                                               |
+//   -------------------------------------------------------------------------------
+*/
+?>
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -18,10 +27,11 @@ td {
 <?php
 require('config.php');
 
+
 if (isset($_REQUEST['buscar'])) {
 	$from= $_REQUEST['fano'].'-'.$_REQUEST['fmes'].'-'.$_REQUEST['fdia'];
 	$to= $_REQUEST['tano'].'-'.$_REQUEST['tmes'].'-'.$_REQUEST['tdia'];
-	$fecha= 'where facturas.fecha >= "'.$from.'" and facturas.fecha <= "'.$to.'"';
+	$fecha= 'where fecha >= "'.$from.'" and fecha <= "'.$to.'"';
 }
 
 //Facturación Pedidos
@@ -54,7 +64,7 @@ SELECT
 	FROM  sales_flat_order sfo, sales_flat_order_item sfoi 
 	WHERE sfoi.order_id = sfo.entity_id and (sfo.state NOT IN ("canceled","closed","pending_payment") OR sfo.status NOT IN ("canceled","closed","pending_payment","servired_pending"))
 	GROUP BY sfo.entity_id desc) 
-facturas';
+facturas '. $fecha;
 
 
 //Bases imponibles e ivas Pedidos
@@ -108,22 +118,21 @@ select
     order by date(sfo.created_at) desc) 
 facturas';
 
-$sql3='select 
-  facturas.id as id
-, facturas.codigo as codigo
-, facturas.nombre as nombre
-, facturas.precio as precio 
-, facturas.cantidad as cantidad
- from ( 
-SELECT csi.product_id as id, cpe.sku as codigo,cpev.value as nombre, cpip.price as precio, csi.qty as cantidad
-FROM cataloginventory_stock_item csi, catalog_product_index_price cpip, catalog_product_entity cpe, catalog_product_entity_varchar cpev
+//Inventario
+$sql3='SELECT facturas.id AS id, facturas.codigo AS codigo, facturas.nombre AS nombre, facturas.coste AS coste, facturas.pvp AS pvp, facturas.cantidad AS cantidad
+FROM (
+
+SELECT csi.product_id AS id, cpe.sku AS codigo, cpev.value AS nombre, cpf11.cost AS coste, cpip.price AS pvp, csi.qty AS cantidad
+FROM cataloginventory_stock_item csi, catalog_product_index_price cpip, catalog_product_entity cpe, catalog_product_entity_varchar cpev, catalog_product_flat_11 cpf11
 WHERE csi.product_id = cpip.entity_id
 AND csi.product_id = cpe.entity_id
 AND csi.product_id = cpev.entity_id
-AND cpev.store_id = 0 
-AND cpev.attribute_id = 71
-GROUP BY csi.product_id) 
-facturas';
+AND csi.product_id = cpf11.entity_id
+AND cpev.store_id =0
+AND cpev.attribute_id =71
+AND csi.qty >=0
+GROUP BY csi.product_id
+)facturas';
 
 //Errores de facturacion
 $sqle='select facturas.id_factura 
@@ -336,6 +345,7 @@ if (isset($_REQUEST['pagos'])) {
 mysqli_close($link);
 }
 
+//inventario
 if (isset($_REQUEST['inventario'])) {
 	$sql=$sql3;
 	echo '
@@ -344,7 +354,8 @@ if (isset($_REQUEST['inventario'])) {
 	<td>Codigo</td>
 	<td>Nombre</td>
 	<td>Cantidad</td>
-	<td>Precio</td></tr>';
+	<td>Coste</td>
+	<td>PVP</td></tr>';
 
 	$lista = mysqli_query($link, $sql);
 	print mysqli_error($link);
@@ -354,20 +365,24 @@ if (isset($_REQUEST['inventario'])) {
 	while ($sigue) {
 		$factura= mysqli_fetch_array($lista);
 		if ($factura) {
-			$total=$total + ($factura['cantidad'] * $factura['precio']);
+			$totalcoste=$totalcoste + ($factura['cantidad'] * $factura['coste']);
+			$totalpvp=$totalpvp + ($factura['cantidad'] * $factura['pvp']);
 			echo'
 			<tr>
 			<td>'.$factura['id'].'</td>
 			<td>'.$factura['codigo'].'</td>
 			<td>'.$factura['nombre'].'</td>
 			<td class="number">'.number_format($factura['cantidad'],2).'</td>
-			<td class="number">'.number_format($factura['precio'],2).'</td></tr>';
+			<td class="number">'.number_format($factura['coste'],2).'</td>
+			<td class="number">'.number_format($factura['pvp'],2).'</td></tr>';
+
 
 
 		} else {
 			$sigue = FALSE;
 			echo '<tr><td colspan="4">Total</td>
-			<td class="number">'.number_format($total,2).'</td></tr></table>';
+			<td colspan="" class="number">'.number_format($totalcoste,2).'</td>
+			<td colspan="" class="number">'.number_format($totalpvp,2).'</td></tr></table>';
 		}
 	}
 mysqli_close($link);

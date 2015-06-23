@@ -1,6 +1,16 @@
+<?php
+/*
+//   -------------------------------------------------------------------------------
+//  |     Magento Shop Control DV: Magento shop products, sales, iban and debug     |
+//  |              Copyright (c) 2015 by Héctor Chirona Torrentí                    |
+//  |                                                                               |
+//   -------------------------------------------------------------------------------
+*/
+?>
 <html>
 <head>
  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+     <title>Facturacion magento Version 1.4</title>
  </head>
 <table>
 <tr>
